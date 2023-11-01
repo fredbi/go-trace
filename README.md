@@ -7,7 +7,7 @@
 
 ![GitHub tag (latest by date)](https://img.shields.io/github/v/tag/fredbi/go-trace)
 [![Go Reference](https://pkg.go.dev/badge/github.com/fredbi/go-trace.svg)](https://pkg.go.dev/github.com/fredbi/go-trace)
-[![license](http://img.shields.io/badge/license/License-MIT-yellow.svg)](https://raw.githubusercontent.com/fredbi/go-trace/master/LICENSE.md)
+[![license](https://img.shields.io/badge/license/License-Apache-yellow.svg)](https://raw.githubusercontent.com/fredbi/go-trace/master/LICENSE.md)
 
 Logging & tracing utilities for micro services.
 
