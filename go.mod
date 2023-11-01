@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/felixge/httpsnoop v1.0.3
-	github.com/influxdata/influxdb v1.10.0
+	github.com/influxdata/influxdb v1.11.2
 	github.com/renatoaf/amplitude-go v1.0.0
 	github.com/stretchr/testify v1.8.1
 	go.opencensus.io v0.24.0
@@ -25,7 +25,6 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
-	golang.org/x/sys v0.0.0-20220823224334-20c2bfdbfe24 // indirect
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
