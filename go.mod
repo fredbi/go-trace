@@ -6,7 +6,7 @@ require (
 	github.com/felixge/httpsnoop v1.0.3
 	github.com/influxdata/influxdb v1.10.0
 	github.com/renatoaf/amplitude-go v1.0.0
-	github.com/stretchr/testify v1.8.1
+	github.com/stretchr/testify v1.8.4
 	go.opencensus.io v0.24.0
 	go.uber.org/zap v1.23.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.43.1
