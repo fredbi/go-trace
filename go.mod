@@ -3,7 +3,7 @@ module github.com/fredbi/go-trace
 go 1.19
 
 require (
-	github.com/felixge/httpsnoop v1.0.3
+	github.com/felixge/httpsnoop v1.0.4
 	github.com/influxdata/influxdb v1.11.2
 	github.com/renatoaf/amplitude-go v1.0.0
 	github.com/stretchr/testify v1.8.4
