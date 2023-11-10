@@ -17,6 +17,7 @@ type (
 		Error(msg string, fields ...zapcore.Field)
 		Fatal(msg string, fields ...zapcore.Field)
 		With(fields ...zapcore.Field) Logger
+		Zap() *zap.Logger
 	}
 
 	// logger delegates all calls to the underlying zap.Logger
@@ -24,6 +25,10 @@ type (
 		logger *zap.Logger
 	}
 )
+
+func (l logger) Zap() *zap.Logger {
+	return l.logger
+}
 
 // Debug logs an debug msg with fields
 func (l logger) Debug(msg string, fields ...zapcore.Field) {

@@ -17,6 +17,10 @@ type spanLogger struct {
 	span   *trace.Span
 }
 
+func (sl spanLogger) Zap() *zap.Logger {
+	return sl.logger
+}
+
 func (sl spanLogger) Debug(msg string, fields ...zapcore.Field) {
 	if !sl.logger.Core().Enabled(zapcore.DebugLevel) {
 		return

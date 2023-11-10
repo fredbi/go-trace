@@ -39,6 +39,10 @@ func (b Factory) Bg() Logger {
 	return logger{logger: b.logger}
 }
 
+func (b Factory) Zap() *zap.Logger {
+	return b.logger
+}
+
 // For returns a context-aware Logger.
 //
 // If the context contains an OpenTracing span, all logging calls are also
