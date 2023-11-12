@@ -2,80 +2,11 @@ package log
 
 import (
 	"fmt"
+	"os"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
-
-type (
-	// LoggerOption sets options to tune the behavior of a logger.
-	LoggerOption func(*loggerOptions)
-
-	loggerOptions struct {
-		logLevel          string
-		callerSkip        int
-		isDevelopment     bool
-		disableStackTrace bool
-		redirectStdLog    bool
-		replaceGlobals    bool
-	}
-)
-
-var loggerDefaults = loggerOptions{
-	logLevel:   "info",
-	callerSkip: 1,
-}
-
-func defaultLoggerOptions(opts []LoggerOption) loggerOptions {
-	if len(opts) == 0 {
-		return loggerDefaults
-	}
-
-	o := loggerDefaults
-	for _, apply := range opts {
-		apply(&o)
-	}
-
-	return o
-}
-
-// WithLevel sets the log level.
-//
-// The level value must parse to a valid zapcore.Level, i.e. one of error, warn, info, debug values.
-// The default level is "info".
-func WithLevel(level string) LoggerOption {
-	return func(o *loggerOptions) {
-		o.logLevel = level
-	}
-}
-
-// WithDisableStackTrace disable stack printing for this logger
-func WithDisableStackTrace(disabled bool) LoggerOption {
-	return func(o *loggerOptions) {
-		o.disableStackTrace = disabled
-	}
-}
-
-// WithCallerSkip sets the number of frames in the stack to skip.
-//
-// By default, this is set to 1, so the logging function itself is skipped.
-func WithCallerSkip(skipped int) LoggerOption {
-	return func(o *loggerOptions) {
-		o.callerSkip = skipped
-	}
-}
-
-func WithRedirectStdLog(enabled bool) LoggerOption {
-	return func(o *loggerOptions) {
-		o.redirectStdLog = enabled
-	}
-}
-
-func WithReplaceGlobals(enabled bool) LoggerOption {
-	return func(o *loggerOptions) {
-		o.replaceGlobals = enabled
-	}
-}
 
 // MustGetLogger creates a named zap logger, typically to inject into a service runtime as the root logger.
 //
@@ -84,34 +15,57 @@ func WithReplaceGlobals(enabled bool) LoggerOption {
 // It panics upon failures, such as invalid log level, or incapacity to build the underlying logger.
 func MustGetLogger(name string, opts ...LoggerOption) (*zap.Logger, func()) {
 	options := defaultLoggerOptions(opts)
-
 	lc := zap.NewProductionConfig()
-	if options.isDevelopment {
-		lc.Development = true
-	}
-
-	lvl, err := zapcore.ParseLevel(options.logLevel)
-	if err != nil {
+	if err := options.applyToConfig(&lc); err != nil {
 		panic(fmt.Sprintf("parsing log level: %v", err))
 	}
 
-	lc.Level = zap.NewAtomicLevelAt(lvl)
-	lc.EncoderConfig.EncodeDuration = zapcore.StringDurationEncoder
-	if options.disableStackTrace {
-		lc.DisableStacktrace = options.disableStackTrace
-	}
-
-	zlg := zap.Must(lc.Build(zap.AddCallerSkip(options.callerSkip)))
+	zlg := zap.Must(
+		lc.Build(zap.AddCallerSkip(options.callerSkip)),
+	)
 	zlg = zlg.Named(name)
-	if options.replaceGlobals {
-		zap.ReplaceGlobals(zlg)
+	options.applyToLogger(zlg)
+
+	return zlg, func() { _ = zlg.Sync() }
+}
+
+// GetTestLoggerConfig is intended to be used in test programs, and inject
+// a logger factory or its underlying *zap.Logger into the tested components.
+//
+// It is configurable from the "DEBUG_TEST" environment variable: if set, logging
+// is enabled. Otherwise, logging is just muted, allowing to keep test verbosity low.
+func GetTestLoggerConfig(opts ...LoggerOption) (Factory, *zap.Logger, error) {
+	isDebug := os.Getenv("DEBUG_TEST") != ""
+	options := defaultLoggerOptions(opts)
+
+	var zlg *zap.Logger
+	if !isDebug {
+		zlg = zap.NewNop()
+		return NewFactory(zlg), zlg, nil
 	}
 
-	if options.redirectStdLog {
-		zap.RedirectStdLog(zlg)
+	lc := zap.NewDevelopmentConfig()
+	lc.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
+	lc.EncoderConfig.EncodeDuration = zapcore.StringDurationEncoder
+	lg, err := lc.Build(zap.AddCallerSkip(1))
+	if err != nil {
+		return Factory{}, nil, err
+	}
+	options.applyToLogger(zlg)
+	zlg = lg
+
+	factory := NewFactory(zlg)
+
+	return factory, zlg, nil
+}
+
+// MustGetTestLoggerConfig is a wrapper around GetTestLoggerConfig that panics
+// if an error is encountered.
+func MustGetTestLoggerConfig() (Factory, *zap.Logger) {
+	fl, zlg, err := GetTestLoggerConfig()
+	if err != nil {
+		panic(fmt.Sprintf("could not acquire test logger: %v", err))
 	}
 
-	return zlg, func() {
-		_ = zlg.Sync()
-	}
+	return fl, zlg
 }

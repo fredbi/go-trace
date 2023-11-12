@@ -1,15 +1,16 @@
-package log
+package middleware
 
 import (
 	"net/http"
 	"time"
 
 	"github.com/felixge/httpsnoop"
+	"github.com/fredbi/go-trace/log"
 	"go.uber.org/zap"
 )
 
-// Requests provides a middleware that logs http requests with a tracing-aware logger Factory.
-func Requests(lf Factory) func(http.Handler) http.Handler {
+// LogRequests provides a middleware that logs http requests with a tracing-aware logger Factory.
+func LogRequests(lf log.Factory) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 			start := time.Now()

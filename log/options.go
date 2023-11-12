@@ -9,9 +9,14 @@ type (
 	}
 )
 
-func defaultOptions(opts []Option) options {
-	o := options{}
+var defaultFactoryOptions = options{}
 
+func defaultOptions(opts []Option) options {
+	if len(opts) == 0 {
+		return defaultFactoryOptions
+	}
+
+	o := defaultFactoryOptions
 	for _, apply := range opts {
 		apply(&o)
 	}

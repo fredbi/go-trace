@@ -12,8 +12,8 @@ import (
 )
 
 type (
-	// Factory is the default logging wrapper that can create
-	// logger instances either contextless, or for a given context
+	// Factory is wrapper for a logger, which creates
+	// logger instances, either contextless or for a given context
 	// (e.g. to propagate trace spans).
 	//
 	// A factory wraps a logger to propagate log entries as trace spans.
@@ -39,41 +39,44 @@ func (b Factory) Bg() Logger {
 	return logger{logger: b.logger}
 }
 
+// Zap returns the underlying zap logger
 func (b Factory) Zap() *zap.Logger {
 	return b.logger
 }
 
 // For returns a context-aware Logger.
 //
-// If the context contains an OpenTracing span, all logging calls are also
+// If the context contains a trace span (from go.opencensus.io/trace), all logging calls are also
 // echo-ed to that span.
 //
 // NOTE: for Datadog trace correlation, extra fields "dd.trace_id" and "dd.span_id"
 // fields are added to the log entry.
 func (b Factory) For(ctx context.Context) Logger {
-	if span := trace.FromContext(ctx); span != nil { // TODO: support opentracing
-		stx := span.SpanContext()
-		logger := b.logger.WithOptions(zap.AddCallerSkip(1))
-
-		if b.datadog {
-			// for datadog correlation, extract trace/span IDs as fields to add to the log entry.
-			// This corresponds to what the datadog opencensus exporter does:
-			// https://github.com/DataDog/opencensus-go-exporter-datadog/tree/master/span.go#L47
-			traceID := binary.BigEndian.Uint64(stx.TraceID[8:])
-			spanID := binary.BigEndian.Uint64(stx.SpanID[:])
-			logger = logger.With(
-				zap.Uint64("dd.trace_id", traceID),
-				zap.Uint64("dd.span_id", spanID),
-				zap.Float64(ext.SamplingPriority, 1.00),
-			)
-		}
-
-		return spanLogger{
-			span:   span,
-			logger: logger,
-		}
+	span := trace.FromContext(ctx)
+	if span == nil { // TODO: support opentracing
+		return b.Bg()
 	}
-	return b.Bg()
+
+	stx := span.SpanContext()
+	logger := b.logger.WithOptions(zap.AddCallerSkip(1))
+
+	if b.datadog {
+		// for datadog correlation, extract trace/span IDs as fields to add to the log entry.
+		// This corresponds to what the datadog opencensus exporter does:
+		// https://github.com/DataDog/opencensus-go-exporter-datadog/tree/master/span.go#L47
+		traceID := binary.BigEndian.Uint64(stx.TraceID[8:])
+		spanID := binary.BigEndian.Uint64(stx.SpanID[:])
+		logger = logger.With(
+			zap.Uint64("dd.trace_id", traceID),
+			zap.Uint64("dd.span_id", spanID),
+			zap.Float64(ext.SamplingPriority, 1.00),
+		)
+	}
+
+	return spanLogger{
+		span:   span,
+		logger: logger,
+	}
 }
 
 // With creates a child logger and optionally adds some context fields to that logger.
