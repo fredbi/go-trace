@@ -9,11 +9,11 @@ type (
 	}
 )
 
-func defaultOptions(opts []Option) *options {
-	o := &options{}
+func defaultOptions(opts []Option) options {
+	o := options{}
 
 	for _, apply := range opts {
-		apply(o)
+		apply(&o)
 	}
 
 	return o

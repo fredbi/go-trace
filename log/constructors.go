@@ -16,25 +16,27 @@ type (
 		callerSkip        int
 		isDevelopment     bool
 		disableStackTrace bool
+		redirectStdLog    bool
+		replaceGlobals    bool
 	}
 )
 
-var loggerDefaults = &loggerOptions{
+var loggerDefaults = loggerOptions{
 	logLevel:   "info",
 	callerSkip: 1,
 }
 
-func defaultLoggerOptions(opts []LoggerOption) *loggerOptions {
+func defaultLoggerOptions(opts []LoggerOption) loggerOptions {
 	if len(opts) == 0 {
 		return loggerDefaults
 	}
 
-	o := *loggerDefaults
+	o := loggerDefaults
 	for _, apply := range opts {
 		apply(&o)
 	}
 
-	return &o
+	return o
 }
 
 // WithLevel sets the log level.
@@ -60,6 +62,18 @@ func WithDisableStackTrace(disabled bool) LoggerOption {
 func WithCallerSkip(skipped int) LoggerOption {
 	return func(o *loggerOptions) {
 		o.callerSkip = skipped
+	}
+}
+
+func WithRedirectStdLog(enabled bool) LoggerOption {
+	return func(o *loggerOptions) {
+		o.redirectStdLog = enabled
+	}
+}
+
+func WithReplaceGlobals(enabled bool) LoggerOption {
+	return func(o *loggerOptions) {
+		o.replaceGlobals = enabled
 	}
 }
 
@@ -89,8 +103,13 @@ func MustGetLogger(name string, opts ...LoggerOption) (*zap.Logger, func()) {
 
 	zlg := zap.Must(lc.Build(zap.AddCallerSkip(options.callerSkip)))
 	zlg = zlg.Named(name)
-	zap.ReplaceGlobals(zlg)
-	zap.RedirectStdLog(zlg)
+	if options.replaceGlobals {
+		zap.ReplaceGlobals(zlg)
+	}
+
+	if options.redirectStdLog {
+		zap.RedirectStdLog(zlg)
+	}
 
 	return zlg, func() {
 		_ = zlg.Sync()

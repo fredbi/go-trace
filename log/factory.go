@@ -22,7 +22,7 @@ type (
 	Factory struct {
 		logger *zap.Logger
 
-		*options
+		options
 	}
 )
 
