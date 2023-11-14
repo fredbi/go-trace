@@ -21,19 +21,16 @@ var prefix = "function"
 //
 // This spares us the boiler plate of repeatedly adding the prefix and function signatures in trace spans and logger.
 func StartSpan(ctx context.Context, rt Loggable, fields ...zap.Field) (context.Context, *trace.Span, log.Logger) {
-	pc, source, line, ok := runtime.Caller(1)
+	pc, _, _, ok := runtime.Caller(1)
 	var signature string
 	if ok {
 		signature = path.Base(runtime.FuncForPC(pc).Name())
 	}
 
 	sctx, span := trace.StartSpan(ctx, signature)
-	signedFields := make([]zap.Field, 0, len(fields)+3)
-	signedFields = append(signedFields,
-		zap.String(prefix, signature),
-		zap.String("source_file", source),
-		zap.Int("source_line", line),
-	)
+
+	signedFields := make([]zap.Field, 0, len(fields)+1)
+	signedFields = append(signedFields, zap.String(prefix, signature))
 	signedFields = append(signedFields, fields...)
 	logger := rt.Logger().For(ctx).With(signedFields...)
 
@@ -42,14 +39,10 @@ func StartSpan(ctx context.Context, rt Loggable, fields ...zap.Field) (context.C
 
 // StartNamedSpan is used inside anonymous functions. The caller may specify a signature.
 func StartNamedSpan(ctx context.Context, rt Loggable, signature string, fields ...zap.Field) (context.Context, *trace.Span, log.Logger) {
-	_, source, line, _ := runtime.Caller(1)
 	sctx, span := trace.StartSpan(ctx, signature)
-	signedFields := make([]zap.Field, 0, len(fields)+3)
-	signedFields = append(signedFields,
-		zap.String(prefix, signature),
-		zap.String("source_file", source),
-		zap.Int("source_line", line),
-	)
+
+	signedFields := make([]zap.Field, 0, len(fields)+1)
+	signedFields = append(signedFields, zap.String(prefix, signature))
 	signedFields = append(signedFields, fields...)
 	logger := rt.Logger().For(ctx).With(signedFields...)
 
