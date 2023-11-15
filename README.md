@@ -41,6 +41,11 @@ Simple utilities to instrument tracing inside apps.
 
 [Example Usage](https://github.com/fredbi/go-trace/blob/master/tracer/example_test.go)
 
+#### Middleware
+
+* `log/middleware/LogRequests` logs all requests from a http server, using the logger factory
+* `tracer.Middleware` wraps the `ochttp` opencensus plugin in a more convenient middleware.
+
 ## Credits
 
 Much inspired by prior art from @casualjim. Thanks so much.
