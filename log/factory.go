@@ -29,7 +29,7 @@ type (
 // NewFactory creates a new logger Factory for an underlying zap logger.
 func NewFactory(logger *zap.Logger, opts ...Option) Factory {
 	return Factory{
-		logger:  logger,
+		logger:  logger.WithOptions(zap.AddCallerSkip(1)),
 		options: defaultOptions(opts),
 	}
 }
@@ -58,7 +58,7 @@ func (b Factory) For(ctx context.Context) Logger {
 	}
 
 	stx := span.SpanContext()
-	logger := b.logger.WithOptions(zap.AddCallerSkip(1))
+	logger := b.logger
 
 	if b.datadog {
 		// for datadog correlation, extract trace/span IDs as fields to add to the log entry.

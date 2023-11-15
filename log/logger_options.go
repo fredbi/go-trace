@@ -22,7 +22,7 @@ type (
 
 var loggerDefaults = loggerOptions{
 	logLevel:   "info",
-	callerSkip: 1,
+	callerSkip: 0,
 }
 
 func defaultLoggerOptions(opts []LoggerOption) loggerOptions {
