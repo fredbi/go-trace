@@ -7,7 +7,7 @@ require (
 	github.com/stretchr/testify v1.8.4
 	go.opencensus.io v0.24.0
 	go.uber.org/zap v1.26.0
-	gopkg.in/DataDog/dd-trace-go.v1 v1.57.0
+	gopkg.in/DataDog/dd-trace-go.v1 v1.58.0
 )
 
 require (
