@@ -21,9 +21,12 @@ Tested to be compatible wih Datadog tracing.
 
 The main idea is to unify logging and tracing, and insulate the app layer from the intricacies of tracing.
 
-This repo provides a few wrappers around a `zap.Logger`:
+This repositories provides a few wrappers around a `zap.Logger`:
 * a logger factory based on zap logger, with a convenient builder to link logs to trace spans
 * a logger builder, e.g. to initialize a root logger for your service
+
+TODOs:
+* [] explore how to expose zerolog as an alternative to zap
 
 ### Usage
 
@@ -35,18 +38,22 @@ import (
 	"go.opencensus.io/trace"
 )
 
-ctx := context.Background()
-zlg, closer := log.MustGetLogger("root") // builds a named zap logger with sensible defaults
-defer closer()
+func tracedFunc() {
+    ctx := context.Background()
+    zlg, closer := log.MustGetLogger("root") // builds a named zap logger with sensible defaults
+    defer closer()
 
-lgf := log.NewFactory(zlg) // builds a logger with trace propagation
+    lgf := log.NewFactory(zlg) // builds a logger with trace propagation
 
-ctx, span := trace.StartSpan(ctx, "span name")
-defer span.End()
-lg := lgf.For(ctx)
+    ctx, span := trace.StartSpan(ctx, "span name")
+    defer span.End()
+    lg := lgf.For(ctx)
 
-lg.Info("log propagated as a trace span")
+    lg.Info("log propagated as a trace span")
+}
 ```
+
+[Full example](https://github.com/fredbi/go-trace/blob/master/log/examples_test.go)
 
 ## Tracing
 
@@ -69,25 +76,24 @@ func (l *loggable) Logger() log.Factory {
     return l.lgf
 }
 
-zlg := log.MustGetLogger("root") // builds a named zap logger with sensible defaults
-lgf := log.NewFactory(zlg) // builds a logger with trace propagation
-component := loggable{lfg:  lgf}
+func tracedFunc() {
+    zlg := log.MustGetLogger("root") // builds a named zap logger with sensible defaults
+    lgf := log.NewFactory(zlg) // builds a logger with trace propagation
+    component := loggable{lfg:  lgf}
 
-ctx, span, lg := tracer.StartSpan(context.Background(), component) // the span is named automatically from the calling function
-defer span.End()
+    ctx, span, lg := tracer.StartSpan(context.Background(), component) // the span is named automatically from the calling function
+    defer span.End()
 
-lg.Info("log propagated as a trace span")
+    lg.Info("log propagated as a trace span")
+}
 ```
 
 [Full example](https://github.com/fredbi/go-trace/blob/master/tracer/example_test.go)
 
 ## Middleware
 
-* `log/middleware/LogRequests` logs all requests from a http server, using the logger factory
-* `tracer.Middleware` wraps the `ochttp` opencensus plugin in a more convenient middleware.
-
-TODOs:
-* [] expose middlewares from a the top level package
+* `middleware.LogRequests` logs all requests from a http server, using the logger factory
+* `middleware.OCHTTP` wraps the `ochttp` opencensus plugin into a more convenient middleware function.
 
 ## Exporters
 
@@ -97,7 +103,6 @@ Various opencensus exporters (as a separate module).
 
 TODOs:
 * [] opentelemetry/opentracing
-* [] reorganize module at the top level
 
 ## Credits
 
