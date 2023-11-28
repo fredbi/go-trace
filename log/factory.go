@@ -8,7 +8,6 @@ import (
 	"go.opencensus.io/trace"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
 )
 
 type (
@@ -21,6 +20,7 @@ type (
 	// Loggers are zap structured loggers: see go.uber.org/zap.
 	Factory struct {
 		logger *zap.Logger
+		fields []zap.Field
 
 		options
 	}
@@ -69,22 +69,32 @@ func (b Factory) For(ctx context.Context) Logger {
 		logger = logger.With(
 			zap.Uint64("dd.trace_id", traceID),
 			zap.Uint64("dd.span_id", spanID),
-			zap.Float64(ext.SamplingPriority, 1.00),
+			zap.Float64("sampling.priority", 1.00),
 		)
 	}
 
 	return spanLogger{
 		span:   span,
+		fields: b.fields,
 		logger: logger,
+		ddFlag: b.datadog,
 	}
 }
 
-// With creates a child logger and optionally adds some context fields to that logger.
+// With creates a child Factory with some extra context fields.
 func (b Factory) With(fields ...zapcore.Field) Factory {
-	return Factory{logger: b.logger.With(fields...)}
+	return Factory{
+		logger:  b.logger.With(fields...),
+		fields:  append(b.fields, fields...),
+		options: b.options,
+	}
 }
 
-// WithZapOptions creates a child logger with some zap.Option
+// WithZapOptions creates a child Factory with some extra zap.Options for the underlying logger.
 func (b Factory) WithZapOptions(opts ...zap.Option) Factory {
-	return Factory{logger: b.logger.WithOptions(opts...)}
+	return Factory{
+		logger:  b.logger.WithOptions(opts...),
+		fields:  b.fields,
+		options: b.options,
+	}
 }

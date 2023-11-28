@@ -4,6 +4,7 @@ import (
 	"context"
 	"path"
 	"runtime"
+	"sync"
 
 	"github.com/fredbi/go-trace/log"
 	"go.opencensus.io/trace"
@@ -15,7 +16,10 @@ type Loggable interface {
 	Logger() log.Factory
 }
 
-var prefix = "function"
+var (
+	prefixLock sync.Mutex
+	prefix     = "function"
+)
 
 // StartSpan returns an opencensus span and logger that prepends the caller's signature.
 //
@@ -32,7 +36,7 @@ func StartSpan(ctx context.Context, rt Loggable, fields ...zap.Field) (context.C
 	signedFields := make([]zap.Field, 0, len(fields)+1)
 	signedFields = append(signedFields, zap.String(prefix, signature))
 	signedFields = append(signedFields, fields...)
-	logger := rt.Logger().For(ctx).With(signedFields...)
+	logger := rt.Logger().With(signedFields...).For(sctx)
 
 	return sctx, span, logger
 }
@@ -44,7 +48,7 @@ func StartNamedSpan(ctx context.Context, rt Loggable, signature string, fields .
 	signedFields := make([]zap.Field, 0, len(fields)+1)
 	signedFields = append(signedFields, zap.String(prefix, signature))
 	signedFields = append(signedFields, fields...)
-	logger := rt.Logger().For(ctx).With(signedFields...)
+	logger := rt.Logger().With(signedFields...).For(sctx)
 
 	return sctx, span, logger
 }
@@ -53,5 +57,7 @@ func StartNamedSpan(ctx context.Context, rt Loggable, signature string, fields .
 //
 // The default value is "function".
 func RegisterPrefix(custom string) {
+	prefixLock.Lock()
 	prefix = custom
+	prefixLock.Unlock()
 }

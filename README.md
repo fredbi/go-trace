@@ -21,30 +21,88 @@ Tested to be compatible wih Datadog tracing.
 
 The main idea is to unify logging and tracing, and insulate the app layer from the intricacies of tracing.
 
-This repo provides a few wrappers around a zap.Logger:
+This repositories provides a few wrappers around a `zap.Logger`:
 * a logger factory based on zap logger, with a convenient builder to link logs to trace spans
 * a logger builder, e.g. to initialize a root logger for your service
-* a simple middleware to trace a `http.Handler`
 
-### Exporters
+TODOs:
+* [] explore how to expose zerolog as an alternative to zap
 
-Various opencensus exporters.
+### Usage
+
+```go
+import (
+    "context"
+
+    "github.com/fredbi/go-trace/log"
+	"go.opencensus.io/trace"
+)
+
+func tracedFunc() {
+    ctx := context.Background()
+    zlg, closer := log.MustGetLogger("root") // builds a named zap logger with sensible defaults
+    defer closer()
+
+    lgf := log.NewFactory(zlg) // builds a logger with trace propagation
+
+    ctx, span := trace.StartSpan(ctx, "span name")
+    defer span.End()
+    lg := lgf.For(ctx)
+
+    lg.Info("log propagated as a trace span")
+}
+```
+
+[Full example](https://github.com/fredbi/go-trace/blob/master/log/examples_test.go)
+
+## Tracing
+
+Simple utilities to instrument tracing inside apps with minimal boiler-plate.
+
+
+```go
+import (
+    "context"
+
+    "github.com/fredbi/go-trace/log"
+    "github.com/fredbi/go-trace/trace"
+)
+
+type loggable struct {
+    lgf log.Factory
+}
+
+func (l *loggable) Logger() log.Factory {
+    return l.lgf
+}
+
+func tracedFunc() {
+    zlg := log.MustGetLogger("root") // builds a named zap logger with sensible defaults
+    lgf := log.NewFactory(zlg) // builds a logger with trace propagation
+    component := loggable{lfg:  lgf}
+
+    ctx, span, lg := tracer.StartSpan(context.Background(), component) // the span is named automatically from the calling function
+    defer span.End()
+
+    lg.Info("log propagated as a trace span")
+}
+```
+
+[Full example](https://github.com/fredbi/go-trace/blob/master/tracer/example_test.go)
+
+## Middleware
+
+* `middleware.LogRequests` logs all requests from a http server, using the logger factory
+* `middleware.OCHTTP` wraps the `ochttp` opencensus plugin into a more convenient middleware function.
+
+## Exporters
+
+Various opencensus exporters (as a separate module).
 * influxdb: export opencensus metrics to an influxdb sink
 * amplitude (experimental): propagate trace event to the amplitude API
 
 TODOs:
 * [] opentelemetry/opentracing
-
-## Tracing
-
-Simple utilities to instrument tracing inside apps.
-
-[Example Usage](https://github.com/fredbi/go-trace/blob/master/tracer/example_test.go)
-
-#### Middleware
-
-* `log/middleware/LogRequests` logs all requests from a http server, using the logger factory
-* `tracer.Middleware` wraps the `ochttp` opencensus plugin in a more convenient middleware.
 
 ## Credits
 

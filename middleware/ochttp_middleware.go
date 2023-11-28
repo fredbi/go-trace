@@ -1,4 +1,4 @@
-package tracer
+package middleware
 
 import (
 	"net/http"
@@ -8,10 +8,12 @@ import (
 	"go.opencensus.io/trace/propagation"
 )
 
-// Middleware that wraps go.opencensus.io/plugin/ochttp for a more idiomatic usage.
+// OCHTTP is a middleware that wraps go.opencensus.io/plugin/ochttp for a more idiomatic usage.
+//
+// It allows a http server to initialize the trace context for handlers and to propagate incoming trace headers.
 //
 // Options available to ochtpp.Handler are exposed here as Options.
-func Middleware(opts ...MiddlewareOption) func(http.Handler) http.Handler {
+func OCHTTP(opts ...OCHTTPOption) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		traceHandler := &ochttp.Handler{
 			Handler: next,
@@ -21,7 +23,7 @@ func Middleware(opts ...MiddlewareOption) func(http.Handler) http.Handler {
 			return traceHandler
 		}
 
-		o := applyMiddlewareOptions(opts)
+		o := applyOCHTTPOptions(opts)
 		traceHandler.IsPublicEndpoint = o.isPublicEndpoint
 		traceHandler.IsHealthEndpoint = o.healthEndpointFunc
 		traceHandler.FormatSpanName = o.spanNameFunc
@@ -47,9 +49,9 @@ func Middleware(opts ...MiddlewareOption) func(http.Handler) http.Handler {
 }
 
 type (
-	MiddlewareOption func(*middlewareOptions)
+	OCHTTPOption func(*ocHTTPOptions)
 
-	middlewareOptions struct {
+	ocHTTPOptions struct {
 		withRoute          string
 		format             propagation.HTTPFormat
 		getStartOptions    func(*http.Request) trace.StartOptions
@@ -60,8 +62,8 @@ type (
 	}
 )
 
-func applyMiddlewareOptions(opts []MiddlewareOption) middlewareOptions {
-	var o middlewareOptions
+func applyOCHTTPOptions(opts []OCHTTPOption) ocHTTPOptions {
+	var o ocHTTPOptions
 
 	for _, apply := range opts {
 		apply(&o)
@@ -71,23 +73,23 @@ func applyMiddlewareOptions(opts []MiddlewareOption) middlewareOptions {
 }
 
 // WithFormat overrides the trace propagation format (default is B3).
-func WithFormat(format propagation.HTTPFormat) MiddlewareOption {
-	return func(o *middlewareOptions) {
+func WithFormat(format propagation.HTTPFormat) OCHTTPOption {
+	return func(o *ocHTTPOptions) {
 		o.format = format
 	}
 }
 
 // WithRoute decorates the trace with an extra route tag
-func WithRoute(route string) MiddlewareOption {
-	return func(o *middlewareOptions) {
+func WithRoute(route string) OCHTTPOption {
+	return func(o *ocHTTPOptions) {
 		o.withRoute = route
 	}
 }
 
 // IsPublicEndpoint instructs the tracer to consider incoming trace metadata as
 // a linked trace rather than a parent (for publicly accessible servers).
-func IsPublicEndpoint(enabled bool) MiddlewareOption {
-	return func(o *middlewareOptions) {
+func IsPublicEndpoint(enabled bool) OCHTTPOption {
+	return func(o *ocHTTPOptions) {
 		o.isPublicEndpoint = enabled
 	}
 }
@@ -96,31 +98,31 @@ func IsPublicEndpoint(enabled bool) MiddlewareOption {
 // a linked trace rather than a parent (for publicly accessible servers).
 //
 // By default, paths like /healthz or /_ah/health are filtered out from tracing.
-func IsHealthEndpoint(filter func(*http.Request) bool) MiddlewareOption {
-	return func(o *middlewareOptions) {
+func IsHealthEndpoint(filter func(*http.Request) bool) OCHTTPOption {
+	return func(o *ocHTTPOptions) {
 		o.healthEndpointFunc = filter
 	}
 }
 
 // WithStartOptions enables trace start options such a overriding the span kind or
 // adding a sampler. See go.opencensus.io/trace.StartOptions.
-func WithStartOptions(opts ...trace.StartOption) MiddlewareOption {
-	return func(o *middlewareOptions) {
+func WithStartOptions(opts ...trace.StartOption) OCHTTPOption {
+	return func(o *ocHTTPOptions) {
 		o.startOptions = opts
 	}
 }
 
 // WithGetStartOptions enables trace start options such a overriding the span kind or
 // adding a sampler, on a per request basis.
-func WithGetStartOptions(fn func(*http.Request) trace.StartOptions) MiddlewareOption {
-	return func(o *middlewareOptions) {
+func WithGetStartOptions(fn func(*http.Request) trace.StartOptions) OCHTTPOption {
+	return func(o *ocHTTPOptions) {
 		o.getStartOptions = fn
 	}
 }
 
 // WithFormatSpanName injects a function to determine the span name according to the request.
-func WithFormatSpanName(fn func(*http.Request) string) MiddlewareOption {
-	return func(o *middlewareOptions) {
+func WithFormatSpanName(fn func(*http.Request) string) OCHTTPOption {
+	return func(o *ocHTTPOptions) {
 		o.spanNameFunc = fn
 	}
 }

@@ -8,21 +8,22 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// MustGetLogger creates a named zap logger, typically to inject into a service runtime as the root logger.
+// MustGetLogger creates a named zap logger, typically injected into a service runtime as the root logger.
 //
 // This function returns a configured zap.Logger and a closing function to sync logs upon exit.
 //
-// It panics upon failures, such as invalid log level, or incapacity to build the underlying logger.
+// It panics upon failures, such as an invalid log level, or incapacity to build the underlying logger.
 func MustGetLogger(name string, opts ...LoggerOption) (*zap.Logger, func()) {
 	options := defaultLoggerOptions(opts)
-	lc := zap.NewProductionConfig()
+	lc := options.seedConfig()
 	if err := options.applyToConfig(&lc); err != nil {
 		panic(fmt.Sprintf("parsing log level: %v", err))
 	}
 
 	zlg := zap.Must(
-		lc.Build(zap.AddCallerSkip(options.callerSkip)),
-	)
+		lc.Build(
+			append(options.zapOpts, zap.AddCallerSkip(options.callerSkip))...,
+		))
 	zlg = zlg.Named(name)
 	options.applyToLogger(zlg)
 
@@ -33,7 +34,11 @@ func MustGetLogger(name string, opts ...LoggerOption) (*zap.Logger, func()) {
 // a logger factory or its underlying *zap.Logger into the tested components.
 //
 // It is configurable from the "DEBUG_TEST" environment variable: if set, logging
-// is enabled. Otherwise, logging is just muted, allowing to keep test verbosity low.
+// is enabled. Otherwise, logging is muted, allowing to keep test verbosity low.
+//
+// Typical usage:
+//
+//	DEBUG_TEST=1 go test -v ./...
 func GetTestLoggerConfig(opts ...LoggerOption) (Factory, *zap.Logger, error) {
 	isDebug := os.Getenv("DEBUG_TEST") != ""
 	options := defaultLoggerOptions(opts)
@@ -41,18 +46,21 @@ func GetTestLoggerConfig(opts ...LoggerOption) (Factory, *zap.Logger, error) {
 	var zlg *zap.Logger
 	if !isDebug {
 		zlg = zap.NewNop()
+
 		return NewFactory(zlg), zlg, nil
 	}
 
-	lc := zap.NewDevelopmentConfig()
+	lc := options.seedTestConfig()
 	lc.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
 	lc.EncoderConfig.EncodeDuration = zapcore.StringDurationEncoder
-	lg, err := lc.Build(zap.AddCallerSkip(1))
+	zlg, err := lc.Build(
+		append(options.zapOpts, zap.AddCallerSkip(options.callerSkip))...,
+	)
 	if err != nil {
 		return Factory{}, nil, err
 	}
+	zlg = zlg.Named("test")
 	options.applyToLogger(zlg)
-	zlg = lg
 
 	factory := NewFactory(zlg)
 
@@ -61,8 +69,8 @@ func GetTestLoggerConfig(opts ...LoggerOption) (Factory, *zap.Logger, error) {
 
 // MustGetTestLoggerConfig is a wrapper around GetTestLoggerConfig that panics
 // if an error is encountered.
-func MustGetTestLoggerConfig() (Factory, *zap.Logger) {
-	fl, zlg, err := GetTestLoggerConfig()
+func MustGetTestLoggerConfig(opts ...LoggerOption) (Factory, *zap.Logger) {
+	fl, zlg, err := GetTestLoggerConfig(opts...)
 	if err != nil {
 		panic(fmt.Sprintf("could not acquire test logger: %v", err))
 	}
