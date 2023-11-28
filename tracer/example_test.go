@@ -10,6 +10,7 @@ import (
 
 var _ tracer.Loggable = Runtime{}
 
+// Runtime is Loggable
 type Runtime struct {
 	logger log.Factory
 }
@@ -19,7 +20,7 @@ func (r Runtime) Logger() log.Factory {
 }
 
 func ExampleStartSpan() {
-	lg, _ := zap.NewProduction()
+	lg, _ := zap.NewDevelopment()
 	rt := Runtime{logger: log.NewFactory(lg)}
 	ctx := context.Background()
 
@@ -32,10 +33,8 @@ func ExampleStartSpan() {
 	logger.Info("test")
 
 	// Should get something like:
-	// 2023-11-01T17:19:58.615+0100	INFO	log/logger.go:35	test	{
-	//	"function": "tracer.TestStartSpan",
-	//	"source_file": ".../github.com/fredbi/go-trace/tracer/tracer_test.go",
-	//	"source_line": 28,
+	// 2023-11-01T17:19:58.615+0100	INFO	tracer/example_test.go:33	test	{
+	//	"function": "tracer_test.ExampleStartSpan",
 	//	"field": "fred"
 	//	}
 }

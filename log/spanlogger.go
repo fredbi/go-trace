@@ -14,7 +14,9 @@ import (
 // spanLogger copies the log output to an opencensus trace span.
 type spanLogger struct {
 	logger *zap.Logger
+	fields []zap.Field
 	span   *trace.Span
+	ddFlag bool
 }
 
 func (sl spanLogger) Zap() *zap.Logger {
@@ -67,23 +69,36 @@ func (sl spanLogger) Fatal(msg string, fields ...zapcore.Field) {
 	sl.logger.Fatal(msg, fields...)
 }
 
-// With creates a child logger, and optionally adds some context fields to that logger.
+// TODO: panic level
+
+// With creates a child logger, with some extra context fields added to that logger.
 func (sl spanLogger) With(fields ...zapcore.Field) Logger {
-	return spanLogger{logger: sl.logger.With(fields...), span: sl.span}
+	return spanLogger{
+		logger: sl.logger.With(fields...),
+		fields: append(sl.fields, fields...),
+		span:   sl.span,
+		ddFlag: sl.ddFlag,
+	}
 }
 
 func (sl spanLogger) logToSpan(level string, msg string, fields ...zapcore.Field) {
-	fa := fieldAdapter(make([]trace.Attribute, 0, len(fields)+1))
+	fa := fieldAdapter(make([]trace.Attribute, 0, len(sl.fields)+len(fields)+1))
 	fa = append(fa, trace.StringAttribute("level", level))
+	for _, field := range sl.fields {
+		field.AddTo(&fa)
+	}
+
 	for _, field := range fields {
 		field.AddTo(&fa)
 	}
 
-	sl.span.Annotate(fa, msg)
+	sl.span.Annotate(nil, msg)
 	sl.span.AddAttributes(fa...)
 
-	// NOTE: when exporting to datadog, annotations are lost: only attributes a propagated.
-	sl.span.AddAttributes(trace.StringAttribute("log_msg", msg))
+	if sl.ddFlag {
+		// when exporting to datadog, annotations are lost: only attributes are propagated.
+		sl.span.AddAttributes(trace.StringAttribute("log_msg", msg))
+	}
 }
 
 var _ zapcore.ObjectEncoder = &fieldAdapter{}
