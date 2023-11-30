@@ -1,27 +1,17 @@
 package log
 
 import (
-	"sync"
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
 )
 
-type fatalMock struct {
-	mx    sync.Mutex
-	count int
-}
-
-func (f *fatalMock) OnWrite(*zapcore.CheckedEntry, []zapcore.Field) {
-	f.mx.Lock()
-	f.count++
-	f.mx.Unlock()
-}
-
-func TestSpanLogger(t *testing.T) {
+func TestOTELLogger(t *testing.T) {
 	observed, observedLogs := observer.New(zapcore.DebugLevel)
 	zlg, closer := MustGetLogger("root",
 		WithZapOptions(zap.WrapCore(func(c zapcore.Core) zapcore.Core {
@@ -29,14 +19,18 @@ func TestSpanLogger(t *testing.T) {
 		})))
 	defer closer()
 
-	l := spanLogger{
+	tr := otel.Tracer("") // returns the global default tracer
+	_, span := tr.Start(context.Background(), "span_name")
+	defer span.End()
+
+	l := otelLogger{
 		logger: zlg,
+		span:   span,
 	}
 	ll := l.With(zap.String("string", "value"))
 	require.NotNil(t, ll.Zap())
 
 	t.Run("with logger fields", func(t *testing.T) {
-
 		ll.Debug("debug")
 		ll.Info("info")
 		ll.Warn("warn")
@@ -71,8 +65,9 @@ func TestSpanLogger(t *testing.T) {
 		zf, err := zap.NewProduction(zap.WithFatalHook(fatalMock))
 		require.NoError(t, err)
 
-		l := spanLogger{
+		l := otelLogger{
 			logger: zf,
+			span:   span,
 		}
 
 		l.Fatal("argh")

@@ -5,17 +5,19 @@ import (
 
 	"encoding/binary"
 
-	"go.opencensus.io/trace"
+	octrace "go.opencensus.io/trace"
+	oteltrace "go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
 type (
-	// Factory is wrapper for a logger, which creates
-	// logger instances, either contextless or for a given context
-	// (e.g. to propagate trace spans).
+	// Factory is wrapper for a logger.
 	//
 	// A factory wraps a logger to propagate log entries as trace spans.
+	//
+	// Factory supports both Opencensus and OpenTelemetry (OTEL) traces.
+	// Use WithOTEL(true) option to build a factory with OTEL trace support.
 	//
 	// Loggers are zap structured loggers: see go.uber.org/zap.
 	Factory struct {
@@ -46,14 +48,23 @@ func (b Factory) Zap() *zap.Logger {
 
 // For returns a context-aware Logger.
 //
-// If the context contains a trace span (from go.opencensus.io/trace), all logging calls are also
+// If the context contains a trace span, all logging calls are also
 // echo-ed to that span.
 //
 // NOTE: for Datadog trace correlation, extra fields "dd.trace_id" and "dd.span_id"
 // fields are added to the log entry.
 func (b Factory) For(ctx context.Context) Logger {
-	span := trace.FromContext(ctx)
-	if span == nil { // TODO: support opentracing
+	if b.otel {
+		return b.forOTEL(ctx)
+	}
+
+	return b.forOpencensus(ctx)
+}
+
+func (b Factory) forOTEL(ctx context.Context) Logger {
+	span := oteltrace.SpanFromContext(ctx)
+	if span == nil {
+		// OTEL tracing returns a noop span, not nil
 		return b.Bg()
 	}
 
@@ -61,16 +72,29 @@ func (b Factory) For(ctx context.Context) Logger {
 	logger := b.logger
 
 	if b.datadog {
-		// for datadog correlation, extract trace/span IDs as fields to add to the log entry.
-		// This corresponds to what the datadog opencensus exporter does:
-		// https://github.com/DataDog/opencensus-go-exporter-datadog/tree/master/span.go#L47
-		traceID := binary.BigEndian.Uint64(stx.TraceID[8:])
-		spanID := binary.BigEndian.Uint64(stx.SpanID[:])
-		logger = logger.With(
-			zap.Uint64("dd.trace_id", traceID),
-			zap.Uint64("dd.span_id", spanID),
-			zap.Float64("sampling.priority", 1.00),
-		)
+		// TODO: check DataDog OTEL exporter
+		logger = loggerForDD(logger, stx.TraceID(), stx.SpanID())
+	}
+
+	return otelLogger{
+		span:   span,
+		fields: b.fields,
+		logger: logger,
+		ddFlag: b.datadog,
+	}
+}
+
+func (b Factory) forOpencensus(ctx context.Context) Logger {
+	span := octrace.FromContext(ctx)
+	if span == nil {
+		return b.Bg()
+	}
+
+	stx := span.SpanContext()
+	logger := b.logger
+
+	if b.datadog {
+		logger = loggerForDD(logger, stx.TraceID, stx.SpanID)
 	}
 
 	return spanLogger{
@@ -79,6 +103,20 @@ func (b Factory) For(ctx context.Context) Logger {
 		logger: logger,
 		ddFlag: b.datadog,
 	}
+}
+
+// for datadog correlation, extract trace/span IDs as fields to add to the log entry.
+//
+// This corresponds to what the datadog opencensus exporter does:
+// https://github.com/DataDog/opencensus-go-exporter-datadog/tree/master/span.go#L47
+func loggerForDD(logger *zap.Logger, trID [16]byte, spID [8]byte) *zap.Logger {
+	traceID := binary.BigEndian.Uint64(trID[8:])
+	spanID := binary.BigEndian.Uint64(spID[:])
+	return logger.With(
+		zap.Uint64("dd.trace_id", traceID),
+		zap.Uint64("dd.span_id", spanID),
+		zap.Float64("sampling.priority", 1.00),
+	)
 }
 
 // With creates a child Factory with some extra context fields.
