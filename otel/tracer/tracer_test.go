@@ -52,15 +52,15 @@ func TestSpanContent(t *testing.T) {
 		require.NotEmpty(t, tr.EndTime())
 		require.Equal(t, "tracer.TestSpanContent", tr.Name())
 
-		require.Len(t, tr.Attributes(), 7)
+		require.Len(t, tr.Attributes(), 6)
 		foundKeys := 0
 		for _, attr := range tr.Attributes() {
 			switch attr.Key {
-			case "level", "function", "field", "int", "duration", "called", "log_msg":
+			case "level", "function", "field", "int", "duration", "called":
 				foundKeys++
 			}
 		}
-		require.Equal(t, 7, foundKeys)
+		require.Equal(t, 6, foundKeys)
 
 		events := tr.Events()
 		require.Len(t, events, 1)
