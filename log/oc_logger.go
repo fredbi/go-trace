@@ -14,8 +14,8 @@ import (
 // spanLogger copies the log output to an opencensus trace span.
 type spanLogger struct {
 	logger *zap.Logger
-	fields []zap.Field
 	span   *trace.Span
+	fields []zap.Field
 	ddFlag bool
 }
 

@@ -5,6 +5,7 @@ type (
 	Option func(*options)
 
 	options struct {
+		otel    bool
 		datadog bool
 	}
 )
@@ -29,5 +30,14 @@ func defaultOptions(opts []Option) options {
 func WithDatadog(enabled bool) Option {
 	return func(o *options) {
 		o.datadog = enabled
+	}
+}
+
+// WithOTEL enables Open Telemetry tracing.
+//
+// The default is to use Opencensus tracing.
+func WithOTEL(enabled bool) Option {
+	return func(o *options) {
+		o.otel = enabled
 	}
 }

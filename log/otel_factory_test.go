@@ -2,36 +2,17 @@ package log
 
 import (
 	"context"
-	"encoding/json"
-	"sync"
 	"testing"
 
+	"github.com/fredbi/go-trace/otel/exporters/mock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opencensus.io/trace"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
 )
 
-// testTracer implements a mock trace exporter
-type testTracer struct {
-	t        testing.TB
-	exported []*trace.SpanData
-	count    int
-	mx       sync.Mutex
-}
-
-func (r *testTracer) ExportSpan(s *trace.SpanData) {
-	b, _ := json.Marshal(s)
-	r.t.Logf("%s", string(b))
-	r.mx.Lock()
-	r.count++
-	r.exported = append(r.exported, s)
-	r.mx.Unlock()
-}
-
-func TestFactory(t *testing.T) {
+func TestFactoryWithOTEL(t *testing.T) {
 	observed, observedLogs := observer.New(zapcore.DebugLevel)
 	zlg, closer := MustGetLogger("root",
 		WithZapOptions(zap.WrapCore(func(c zapcore.Core) zapcore.Core {
@@ -39,7 +20,7 @@ func TestFactory(t *testing.T) {
 		})))
 	defer closer()
 
-	lgf := NewFactory(zlg) // builds a logger with trace propagation
+	lgf := NewFactory(zlg, WithOTEL(true)) // builds a logger with trace propagation on OTEL
 	require.NotNil(t, lgf.Zap())
 
 	t.Run("with background", func(t *testing.T) {
@@ -79,15 +60,11 @@ func TestFactory(t *testing.T) {
 	})
 
 	t.Run("with context span", func(t *testing.T) {
-		myTestTracer := &testTracer{t: t}
-		trace.ApplyConfig(trace.Config{DefaultSampler: trace.AlwaysSample()})
-		trace.RegisterExporter(myTestTracer)
-		t.Cleanup(func() {
-			trace.UnregisterExporter(myTestTracer)
-		})
+		myTestTracer := mock.NewTracer(t)
+		myExporter := myTestTracer.Exporter()
 
-		ctx, span := trace.StartSpan(context.Background(), "span name")
-		l := lgf.For(ctx).With(zap.String("tescase", "bg test"))
+		ctx, span := myTestTracer.Start(context.Background(), "span name")
+		l := lgf.For(ctx).With(zap.String("tescase", "span test"))
 
 		l.Info("span log", zap.Int("entries", 1))
 
@@ -106,27 +83,32 @@ func TestFactory(t *testing.T) {
 
 		defer func() {
 			t.Run("assert span entry", func(t *testing.T) {
-				require.Equal(t, 1, myTestTracer.count)
-				require.Len(t, myTestTracer.exported, 1)
+				require.Equal(t, 1, myExporter.Count())
+				require.Len(t, myExporter.Exported, 1)
 
-				tr := myTestTracer.exported[0]
+				tr := myExporter.Exported[0]
 
-				require.NotEmpty(t, tr.SpanContext.TraceID)
-				require.NotEmpty(t, tr.SpanContext.SpanID)
+				require.NotEmpty(t, tr.SpanContext().TraceID())
+				require.NotEmpty(t, tr.SpanContext().SpanID())
 
 				require.NotEmpty(t, tr.StartTime)
 				require.NotEmpty(t, tr.EndTime)
 
-				require.Len(t, tr.Attributes, 3)
-				require.Len(t, tr.Annotations, 1)
-				require.Equal(t, "span log", tr.Annotations[0].Message)
+				require.Len(t, tr.Attributes(), 3)
+				events := tr.Events()
+				require.Len(t, events, 1)
+				event := events[0]
+				require.Equal(t, "span log", event.Name)
 			})
 		}()
-		defer span.End()
+		defer func() {
+			span.End()
+			_ = myTestTracer.ForceFlush(ctx)
+		}()
 	})
 }
 
-func TestFactoryWithDatadog(t *testing.T) {
+func TestFactoryWithOTELDatadog(t *testing.T) {
 	observed, observedLogs := observer.New(zapcore.DebugLevel)
 	zlg, closer := MustGetLogger("root",
 		WithZapOptions(zap.WrapCore(func(c zapcore.Core) zapcore.Core {
@@ -134,21 +116,17 @@ func TestFactoryWithDatadog(t *testing.T) {
 		})))
 	defer closer()
 
-	lgf := NewFactory(zlg, WithDatadog(true))
+	lgf := NewFactory(zlg, WithOTEL(true), WithDatadog(true))
 
 	t.Run("with context span", func(t *testing.T) {
-		myTestTracer := &testTracer{t: t}
-		trace.ApplyConfig(trace.Config{DefaultSampler: trace.AlwaysSample()})
-		trace.RegisterExporter(myTestTracer)
-		t.Cleanup(func() {
-			trace.UnregisterExporter(myTestTracer)
-		})
+		myTestTracer := mock.NewTracer(t)
+		myExporter := myTestTracer.Exporter()
 
-		ctx, span := trace.StartSpan(context.Background(), "span name")
+		ctx, span := myTestTracer.Start(context.Background(), "span name")
 		l := lgf.For(ctx).With(zap.String("tescase", "bg test"))
 
 		t.Run("internal verification", func(t *testing.T) {
-			asSpanLogger, ok := l.(spanLogger)
+			asSpanLogger, ok := l.(otelLogger)
 			assert.True(t, ok)
 			assert.True(t, asSpanLogger.ddFlag)
 		})
@@ -180,23 +158,30 @@ func TestFactoryWithDatadog(t *testing.T) {
 
 		defer func() {
 			t.Run("assert span entry", func(t *testing.T) {
-				require.Equal(t, 1, myTestTracer.count)
-				require.Len(t, myTestTracer.exported, 1)
+				require.Equal(t, 1, myExporter.Count())
+				require.Len(t, myExporter.Exported, 1)
 
-				tr := myTestTracer.exported[0]
+				tr := myExporter.Exported[0]
 
-				require.NotEmpty(t, tr.SpanContext.TraceID)
-				require.NotEmpty(t, tr.SpanContext.SpanID)
+				require.NotEmpty(t, tr.SpanContext().TraceID())
+				require.NotEmpty(t, tr.SpanContext().SpanID())
 
 				require.NotEmpty(t, tr.StartTime)
 				require.NotEmpty(t, tr.EndTime)
 
-				require.Len(t, tr.Attributes, 4)
-				require.Len(t, tr.Annotations, 1)
-				require.Equal(t, "span log", tr.Annotations[0].Message)
-				require.Contains(t, tr.Attributes, "log_msg")
+				require.Len(t, tr.Attributes(), 3)
+				events := tr.Events()
+				require.Len(t, events, 1)
+
+				event := events[0]
+				require.Equal(t, "span log", event.Name)
+				require.Empty(t, event.Attributes)
 			})
 		}()
-		defer span.End()
+
+		defer func() {
+			span.End()
+			_ = myTestTracer.ForceFlush(ctx)
+		}()
 	})
 }

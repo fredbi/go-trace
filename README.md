@@ -14,6 +14,7 @@ Logging & tracing utilities for micro services.
 Based on:
 * `go.uber.org/zap`
 * `go.opencensus.io/trace`
+* `go.opentelemetry.io/otel`
 
 Tested to be compatible wih Datadog tracing.
 
@@ -29,6 +30,8 @@ TODOs:
 * [] explore how to expose zerolog as an alternative to zap
 
 ### Usage
+
+With OpenCensus tracing.
 
 ```go
 import (
@@ -53,19 +56,48 @@ func tracedFunc() {
 }
 ```
 
-[Full example](https://github.com/fredbi/go-trace/blob/master/log/examples_test.go)
-
-## Tracing
-
-Simple utilities to instrument tracing inside apps with minimal boiler-plate.
-
+With OpenTelemetry tracing.
 
 ```go
 import (
     "context"
 
     "github.com/fredbi/go-trace/log"
-    "github.com/fredbi/go-trace/trace"
+	"go.opentelemetry.io/otel"
+)
+
+
+func tracedFunc() {
+    tracer := otel.Tracer("") // returns the global default tracer
+    ctx := context.Background()
+    zlg, closer := log.MustGetLogger("root")
+    defer closer()
+
+    lgf := log.NewFactory(zlg) // builds a logger with trace propagation
+
+    ctx, span := tracer.Start(ctx, "span name")
+    defer span.End()
+    lg := lgf.For(ctx)
+
+    lg.Info("log propagated as a trace span")
+}
+```
+
+[Full example](https://github.com/fredbi/go-trace/blob/master/log/examples_test.go)
+
+## Tracing
+
+A simple wrapper to instrument tracing in apps with minimal boiler-plate.
+
+
+With OpenCensus tracing.
+
+```go
+import (
+    "context"
+
+    "github.com/fredbi/go-trace/log"
+    "github.com/fredbi/go-trace/opencensus/tracer"
 )
 
 type loggable struct {
@@ -88,21 +120,62 @@ func tracedFunc() {
 }
 ```
 
-[Full example](https://github.com/fredbi/go-trace/blob/master/tracer/example_test.go)
+[Full example](https://github.com/fredbi/go-trace/blob/master/opencensus/tracer/example_test.go)
+
+With OpenTelemetry tracing.
+
+```go
+import (
+    "context"
+
+    "github.com/fredbi/go-trace/log"
+    "github.com/fredbi/go-trace/otel/tracer"
+)
+
+type loggable struct {
+    lgf log.Factory
+    tracer trace.Tracer
+}
+
+func (l *loggable) Logger() log.Factory {
+    return l.lgf
+}
+
+// Tracer returns the configured tracer. If this method, is not provided,
+// the default globally registered OTEL tracer is returned.
+func (l *loggable) Tracer() trace.Tracer {
+    return l.tracer 
+}
+
+func tracedFunc() {
+    zlg := log.MustGetLogger("root") // builds a named zap logger with sensible defaults
+    lgf := log.NewFactory(zlg, log.WithOTEL(true)) // builds a logger with trace propagation
+    component := loggable{lfg:  lgf}
+
+    ctx, span, lg := tracer.StartSpan(context.Background(), component) // the span is named automatically from the calling function
+    defer span.End()
+
+    lg.Info("log propagated as a trace span")
+}
+```
+
+[Full example](https://github.com/fredbi/go-trace/blob/master/otel/tracer/example_test.go)
 
 ## Middleware
 
 * `middleware.LogRequests` logs all requests from a http server, using the logger factory
-* `middleware.OCHTTP` wraps the `ochttp` opencensus plugin into a more convenient middleware function.
+
+* `opencensus/middleware.OCHTTP` wraps the `ochttp` opencensus plugin into a more convenient middleware function.
+* `otel/middleware.OTELHTTP` wraps the `otelhttp` OTEL contrib plugin.
 
 ## Exporters
 
-Various opencensus exporters (as a separate module).
-* influxdb: export opencensus metrics to an influxdb sink
-* amplitude (experimental): propagate trace event to the amplitude API
+Mock trace exporters for opencensus and OTEL.
 
-TODOs:
-* [] opentelemetry/opentracing
+## Misc
+Various opencensus exporters (as a separate module).
+* misc/influxdb: export opencensus metrics to an influxdb sink
+* misc/amplitude (experimental): propagate trace event to the amplitude API
 
 ## Credits
 

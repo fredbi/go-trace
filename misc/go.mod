@@ -1,4 +1,4 @@
-module github.com/fredbi/go-trace/log/exporters
+module github.com/fredbi/go-trace/log/misc
 
 go 1.21.4
 

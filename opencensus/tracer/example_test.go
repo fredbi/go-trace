@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/fredbi/go-trace/log"
-	"github.com/fredbi/go-trace/tracer"
+	"github.com/fredbi/go-trace/opencensus/tracer"
 	"go.uber.org/zap"
 )
 
@@ -20,7 +20,7 @@ func (r Runtime) Logger() log.Factory {
 }
 
 func ExampleStartSpan() {
-	lg, _ := zap.NewDevelopment()
+	lg := zap.NewExample()
 	rt := Runtime{logger: log.NewFactory(lg)}
 	ctx := context.Background()
 
@@ -32,15 +32,12 @@ func ExampleStartSpan() {
 
 	logger.Info("test")
 
-	// Should get something like:
-	// 2023-11-01T17:19:58.615+0100	INFO	tracer/example_test.go:33	test	{
-	//	"function": "tracer_test.ExampleStartSpan",
-	//	"field": "fred"
-	//	}
+	// output:
+	// {"level":"info","msg":"test","function":"tracer_test.ExampleStartSpan","field":"fred"}
 }
 
 func ExampleStartNamedSpan() {
-	lg, _ := zap.NewDevelopment()
+	lg := zap.NewExample()
 	rt := Runtime{logger: log.NewFactory(lg)}
 	ctx := context.Background()
 
@@ -53,4 +50,7 @@ func ExampleStartNamedSpan() {
 	}
 
 	handleFunc()
+
+	// output:
+	// {"level":"info","msg":"test","function":"signature","field":"fred"}
 }
